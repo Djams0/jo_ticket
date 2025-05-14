@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mes Tickets</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .ticket-card {
+            background-color: #1f2235;
+            border: 1px solid #ccc;
+            display: flex;
+            min-height: 200px;
+        }
+
+        .ticket-info {
+            flex: 1;
+            background-color: #2c2e3e;
+            color: white;
+        }
+
+        .ticket-qr {
+            width: 200px;
+            background-color: #22325e;
+        }
+
+        .ticket-qr img {
+            width: 150px;
+            height: 150px;
+            object-fit: contain;
+        }
+
+        .info-box {
+            background-color: #2c2e3e;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 14px;
+        }
+
+        .small-box {
+            flex: 1;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .ticket-card {
+                flex-direction: column;
+            }
+
+            .ticket-qr {
+                width: 100%;
+                justify-content: center;
+                padding: 1rem 0;
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark text-white">
+    <div class="container" style="margin-top: 50px;">
+        <h2 class="mb-4">Mes Tickets</h2>
+        <div id="error" class="alert alert-danger d-none"></div>
+        <div id="ticketsContainer"></div>
+        <a href="index.html" class="btn btn-secondary mt-4">Retour à la liste</a>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+
+        if (!token) {
+            document.getElementById('error').textContent = "Token d'accès manquant. Veuillez vous connecter.";
+            document.getElementById('error').classList.remove('d-none');
+        } else {
+            fetch('http://localhost:3000/my-tickets', {
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('Erreur lors de la récupération des tickets');
+                return response.json();
+            })
+            .then(tickets => {
+                const container = document.getElementById('ticketsContainer');
+                if (tickets.length === 0) {
+                    container.innerHTML = `<div class="alert alert-info">Vous n'avez aucun ticket pour l'instant.</div>`;
+                    return;
+                }
+
+                // Tri des tickets par date
+                tickets.sort((a, b) => new Date(a.start) - new Date(b.start));
+
+                container.innerHTML = tickets.map(ticket => `
+                    <div class="col-12 mb-3">
+                        <div class="ticket-card d-flex rounded-4 overflow-hidden">
+                            <div class="ticket-info p-3 d-flex flex-column justify-content-center gap-2">
+                                <div class="info-box">Stade : ${ticket.stadium || 'Non défini'}</div>
+                                <div class="info-box">${ticket.home_team || 'Équipe 1'} vs ${ticket.away_team || 'Équipe 2'}</div>
+                                <div class="info-box">Date : ${ticket.start ? new Date(ticket.start).toLocaleString('fr-FR') : 'Non défini'}</div>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <div class="info-box small-box">Catégorie : ${ticket.category || 'Non défini'}</div>
+                                    <div class="info-box small-box">Statut : ${ticket.used ? 'Utilisé' : 'Non utilisé'}</div>
+                                </div>
+                            </div>
+                            <div class="ticket-qr d-flex align-items-center justify-content-center">
+                                ${ticket.qr_code
+                                    ? `<img src="${ticket.qr_code}" alt="QR Code">`
+                                    : `<span>QR Code non dispo</span>`}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            })
+            .catch(error => {
+                document.getElementById('error').textContent = error.message;
+                document.getElementById('error').classList.remove('d-none');
+            });
+        }
+    </script>
+</body>
+</html>

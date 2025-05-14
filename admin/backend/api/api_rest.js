@@ -38,20 +38,20 @@ const authenticateToken = (req, res, next) => {
 
 // Inscription utilisateur (Le hash du mot de passe est géré en PHP)
 app.post('/register', (req, res) => {
-  const { username, email, password } = req.body;
+  const { username, email, password, is_superuser } = req.body;
 
-  if (!username || !email || !password) return res.status(400).send('Tous les champs sont obligatoires');
+  if (!username || !email || !password || typeof is_superuser === 'undefined') return res.status(400).send('Tous les champs sont obligatoires');
 
-  const query = "INSERT INTO auth_user (username, email, password) VALUES (?, ?, SHA2(?, 256))";
-  db.query(query, [username, email, password], (err, result) => {
+  const query = "INSERT INTO auth_user (username, email, password, is_superuser) VALUES (?, ?, SHA2(?, 256), ?)";
+  db.query(query, [username, email, password, is_superuser], (err, result) => {
     if (err) return res.status(500).send(err);
 
     const userId = result.insertId;
 
     // Création du token JWT
-    const token = jwt.sign({ id: userId, username, is_superuser: 0 }, SECRET_KEY, { expiresIn: '48h' });
+    const token = jwt.sign({ id: userId, username, is_superuser }, SECRET_KEY, { expiresIn: '48h' });
 
-    res.status(201).json({ token, user: { id: userId, username, email, is_superuser: 0 } });
+    res.status(201).json({ token, user: { id: userId, username, email, is_superuser} });
   });
 });
 
@@ -176,6 +176,61 @@ app.get('/my-tickets', authenticateToken, (req, res) => {
     res.json(results);
   });
 });
+
+
+// ✅ Route admin : afficher tous les matchs
+app.get('/admin/matches', async (req, res) => {
+  try {
+    const [matches] = await db.promise().execute(`
+      SELECT 
+        e.id, e.start, e.score, 
+        s.name AS stadium, s.location,
+        th.name AS home_team, ta.name AS away_team,
+        e.team_home_id, e.team_away_id,
+        w.name AS winner
+      FROM mainapp_event e
+      LEFT JOIN mainapp_stadium s ON e.stadium_id = s.id
+      LEFT JOIN mainapp_team th ON e.team_home_id = th.id
+      LEFT JOIN mainapp_team ta ON e.team_away_id = ta.id
+      LEFT JOIN mainapp_team w ON e.winner_id = w.id
+      ORDER BY e.start
+    `);
+
+    res.json(matches);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur lors de la récupération des matchs.' });
+  }
+});
+
+// ✅ Route admin : mettre à jour un match
+app.put('/admin/match/:id', async (req, res) => {
+  const matchId = req.params.id;
+  const { start, score, winner } = req.body;
+
+  if (!start || !score || !winner) {
+    return res.status(400).json({ error: 'Champs requis manquants.' });
+  }
+
+  try {
+    const [result] = await db.promise().execute(`
+      UPDATE mainapp_event
+      SET start = ?, score = ?, winner_id = ?
+      WHERE id = ?
+    `, [start, score, winner, matchId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Match non trouvé.' });
+    }
+
+    res.json({ message: 'Match mis à jour avec succès.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour du match.' });
+  }
+});
+
+
 
 
 // Lancer le serveur

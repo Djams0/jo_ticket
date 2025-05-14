@@ -1,55 +1,3 @@
-<?php
-session_start(); // Démarrer la session
-
-include '../../backend/db/db.php'; // Assurez-vous que le chemin est correct
-
-// Vérifier si $pdo est défini et est un objet PDO valide
-if (!$pdo) {
-    die("Échec de la connexion à la base de données.");
-}
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $username = $_POST['username'];
-    $email = $_POST['email'];
-    $password = $_POST['password'];
-    $hashed_password = password_hash($password, PASSWORD_DEFAULT); // Sécuriser le mot de passe
-
-    try {
-        // Vérifier si l'utilisateur existe déjà
-        $sql = "SELECT * FROM auth_user WHERE username = :username OR email = :email";
-        $stmt = $pdo->prepare($sql); // Utiliser $pdo ici au lieu de $conn
-        $stmt->bindParam(':username', $username, PDO::PARAM_STR);
-        $stmt->bindParam(':email', $email, PDO::PARAM_STR);
-        $stmt->execute();
-        
-        if ($stmt->rowCount() > 0) {
-            echo "L'utilisateur existe déjà.";
-        } else {
-            // Insérer un nouvel utilisateur (administrateur)
-            $sql = "INSERT INTO auth_user (username, email, password, is_superuser, is_active) VALUES (:username, :email, :password, 1, 1)";
-            $stmt = $pdo->prepare($sql); // Utiliser $pdo ici au lieu de $conn
-            $stmt->bindParam(':username', $username, PDO::PARAM_STR);
-            $stmt->bindParam(':email', $email, PDO::PARAM_STR);
-            $stmt->bindParam(':password', $hashed_password, PDO::PARAM_STR);
-
-            if ($stmt->execute()) {
-                // L'inscription a réussi, ouvrir la session et rediriger
-                $_SESSION['username'] = $username; // Définir la variable de session
-                $_SESSION['email'] = $email; // Vous pouvez aussi stocker l'email si nécessaire
-
-                // Rediriger vers la page index.php
-                header("Location: index.php");
-                exit(); // Terminer l'exécution du script après la redirection
-            } else {
-                echo "Erreur lors de l'inscription.";
-            }
-        }
-    } catch (PDOException $e) {
-        echo "Erreur : " . $e->getMessage();
-    }
-}
-?>
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -57,50 +5,129 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inscription Administrateur</title>
     <style>
-        a{
-            display: flex;
-            justify-content: center;
-            margin-top: 20px;
-            text-decoration: none;
-            color: #007BFF;
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
         }
+        
         form {
             max-width: 400px;
             margin: 0 auto;
             padding: 1em;
             border: 1px solid #ccc;
             border-radius: 5px;
+            background-color: #f9f9f9;
         }
-        label, input, button {
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input {
             display: block;
             width: 100%;
-            margin-bottom: 10px;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
         }
+        
         button {
             background-color: #007BFF;
             color: white;
             border: none;
             padding: 10px;
             cursor: pointer;
+            width: 100%;
+            border-radius: 4px;
+            font-size: 16px;
         }
+        
         button:hover {
             background-color: #0056b3;
+        }
+        
+        a {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            text-decoration: none;
+            color: #007BFF;
+        }
+        
+        a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
 <body>
-    <form method="POST">
+    <form method="POST" id="registrationForm">
         <label for="username">Nom d'utilisateur:</label>
-        <input type="text" name="username" required>
+        <input type="text" id="username" name="username" required>
 
         <label for="email">E-mail:</label>
-        <input type="email" name="email" required>
+        <input type="email" id="email" name="email" required>
 
         <label for="password">Mot de passe:</label>
-        <input type="password" name="password" required>
+        <input type="password" id="password" name="password" required>
 
         <button type="submit">S'inscrire</button>
     </form>
+    
     <a href="login.php">Déjà inscrit, je me connecte.</a>
+
+    <script>
+        document.getElementById('registrationForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Récupération des valeurs du formulaire
+            const username = this.username.value.trim();
+            const email = this.email.value.trim();
+            const password = this.password.value;
+            
+            // Validation des champs
+            if (!username || !email || !password) {
+                alert("Tous les champs sont requis.");
+                return;
+            }
+            
+            try {
+                // Envoi des données au serveur
+                const response = await fetch('http://localhost:3000/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        email: email,
+                        password: password,
+                        is_superuser: true
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Gestion de la réponse positive
+                    alert("Inscription réussie !");
+                    localStorage.setItem('token', data.token);
+                    window.location.href = 'index.html';
+                } else {
+                    // Gestion des erreurs du serveur
+                    alert(data.message || 'Erreur lors de l\'inscription');
+                }
+            } catch (error) {
+                // Gestion des erreurs réseau
+                console.error('Erreur réseau :', error);
+                alert('Erreur réseau ou serveur.');
+            }
+        });
+    </script>
 </body>
 </html>
